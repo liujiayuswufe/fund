@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="supabase-url" content="https://dkosimntffdhjkxukikk.supabase.co">
+  <meta name="supabase-publishable-key" content="sb_publishable_qdVPMQlLDm95_3oGYb72Bw_VX6zzFM1">
+  <title>模拟 FOF 组合</title>
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./fof.css">
+  <script src="./static/chart.umd.js"></script>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero hero-fof">
+      <div>
+        <p class="eyebrow">Portfolio Builder</p>
+        <h1>模拟 FOF 组合</h1>
+        <p class="hero-copy">
+          页面会直接从 Supabase 读取邮件爬取后同步的基金净值与基准数据，上传到 GitHub Pages 后即可直接使用。
+          已保存组合只会存放在当前浏览器的 localStorage 中，不会回写数据库。
+        </p>
+      </div>
+      <div class="toolbar toolbar-fof">
+        <button id="newPortfolioBtn" type="button" class="btn btn-secondary">新建</button>
+        <button id="savePortfolioBtn" type="button" class="btn btn-primary">确认并保存组合</button>
+      </div>
+    </header>
+
+    <div id="statusBar" class="status-bar"></div>
+
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>新建组合</h2>
+          <p>先命名、选择开始时间，再点选子基金并填写权重。</p>
+        </div>
+      </div>
+
+      <div class="builder-grid">
+        <label class="fof-field">
+          <span>组合名称</span>
+          <input id="portfolioNameInput" type="text" placeholder="例如：稳健均衡 FOF">
+        </label>
+        <label class="fof-field">
+          <span>开始时间</span>
+          <input id="startDateInput" type="date">
+        </label>
+        <article class="fof-mini-card">
+          <span>已选子基金</span>
+          <strong id="selectedFundCount">0</strong>
+        </article>
+        <article class="fof-mini-card">
+          <span>权重合计</span>
+          <strong id="weightTotal">0.00</strong>
+        </article>
+      </div>
+
+      <div class="selection-layout">
+        <section class="selection-panel">
+          <div class="selection-head">
+            <h3>请选择 FOF 中的子基金</h3>
+            <p>点击左侧基金即可选入组合，再到右侧填写权重。</p>
+          </div>
+          <div id="fundChipList" class="fund-chip-grid">
+            <div class="empty-block">正在从 Supabase 加载基金列表...</div>
+          </div>
+        </section>
+
+        <section class="selection-panel">
+          <div class="selection-head">
+            <h3>已选子基金</h3>
+            <p>若权重和小于 1，例如 0.6，则剩余部分按现金仓位处理，现金净值固定按 1 计算；否则自动归一化。</p>
+          </div>
+          <div id="selectedFundsList" class="selected-funds-list">
+            <div class="empty-block">点击左侧基金后，这里会显示“子基金 1、子基金 2 ...”及其权重。</div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>已保存组合</h2>
+          <p>这些组合保存在当前浏览器中，可随时查看或删除。</p>
+        </div>
+      </div>
+      <div id="savedPortfolios" class="saved-portfolio-grid">
+        <div class="empty-block">当前还没有已保存的 FOF 组合。</div>
+      </div>
+    </section>
+
+    <section class="summary-grid fof-summary-grid">
+      <article class="summary-card">
+        <span class="summary-label">组合名称</span>
+        <strong class="summary-value summary-name" id="summaryName">--</strong>
+      </article>
+      <article class="summary-card">
+        <span class="summary-label">请求开始时间</span>
+        <strong class="summary-value" id="summaryRequestedStart">--</strong>
+      </article>
+      <article class="summary-card">
+        <span class="summary-label">有效开始时间</span>
+        <strong class="summary-value" id="summaryEffectiveStart">--</strong>
+      </article>
+      <article class="summary-card">
+        <span class="summary-label">最新净值日期</span>
+        <strong class="summary-value" id="summaryLatestDate">--</strong>
+      </article>
+      <article class="summary-card emphasis">
+        <span class="summary-label">最新单位净值</span>
+        <strong class="summary-value" id="summaryLatestUnitNav">--</strong>
+      </article>
+      <article class="summary-card emphasis">
+        <span class="summary-label">最新累计净值</span>
+        <strong class="summary-value" id="summaryLatestAccumNav">--</strong>
+      </article>
+      <article class="summary-card emphasis">
+        <span class="summary-label">累计收益率</span>
+        <strong class="summary-value" id="summaryCumReturn">--</strong>
+      </article>
+      <article class="summary-card emphasis">
+        <span class="summary-label">最大回撤</span>
+        <strong class="summary-value" id="summaryMaxDrawdown">--</strong>
+      </article>
+      <article class="summary-card">
+        <span class="summary-label">子基金数量</span>
+        <strong class="summary-value" id="summaryMemberCount">--</strong>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>FOF 净值曲线</h2>
+          <p id="activePortfolioMeta">请选择或新建一个 FOF 组合后查看，图中会同时展示单位净值和累计净值。</p>
+        </div>
+      </div>
+      <div class="chart-box fof-chart-box">
+        <canvas id="fofNavChart"></canvas>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>FOF 回撤曲线</h2>
+          <p id="drawdownMeta">回撤曲线按 FOF 组合累计净值的历史高点动态计算，并支持与基准回撤对比。</p>
+        </div>
+        <div class="panel-tools">
+          <label class="benchmark-control" for="fofBenchmarkSelector">
+            <span>回撤对比基准</span>
+            <select id="fofBenchmarkSelector" aria-label="选择 FOF 回撤对比基准">
+              <option value="000300">沪深 300</option>
+              <option value="000001">上证指数</option>
+              <option value="000852">中证 1000</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div class="drawdown-chart-box fof-drawdown-box">
+        <canvas id="fofDrawdownChart"></canvas>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>组合构成</h2>
+          <p>展示保存时填写的原始权重，以及计算时归一化后的组合权重。</p>
+        </div>
+      </div>
+
+      <div class="tab-content active">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>子基金</th>
+              <th>原始权重</th>
+              <th>组合权重</th>
+              <th>有效开始日</th>
+              <th>最新净值日</th>
+              <th>区间收益率</th>
+            </tr>
+          </thead>
+          <tbody id="compositionBody">
+            <tr><td colspan="6" class="empty-row">请选择或新建一个组合后查看</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script src="./fof.js"></script>
+</body>
+</html>
